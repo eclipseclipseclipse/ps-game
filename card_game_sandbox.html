@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Card Game Sandbox Multiplayer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .font-card {
+            font-family: 'Fredoka', cursive;
+        }
+
+        /* Background Themes */
+        .theme-green-felt {
+            background-color: #11441a;
+            background-image: radial-gradient(circle at center, #1e632a 0%, #0d3b13 70%, #051e08 100%);
+        }
+        .theme-blue-felt {
+            background-color: #0b2e63;
+            background-image: radial-gradient(circle at center, #144f9c 0%, #082b66 70%, #031533 100%);
+        }
+        .theme-dark-slate {
+            background-color: #111827;
+            background-image: radial-gradient(circle at center, #374151 0%, #1f2937 70%, #111827 100%);
+        }
+        .theme-blueprint {
+            background-color: #0f2b48;
+            background-image: linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+
+        /* Compact Cards */
+        .card {
+            width: 64px;
+            height: 94px;
+            border-radius: 7px;
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+            perspective: 800px;
+            touch-action: none;
+        }
+
+        .card:active {
+            cursor: grabbing;
+        }
+
+        .card.is-selected {
+            outline: 3px solid #60a5fa;
+            outline-offset: 2px;
+            box-shadow: 0 0 12px rgba(96, 165, 250, 0.8);
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+            border-radius: inherit;
+        }
+
+        .card.is-flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            border-radius: inherit;
+            border: 2px solid #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 3px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        /* Colors */
+        .bg-card-red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #ffffff; }
+        .bg-card-yellow { background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); color: #ffffff; }
+        .bg-card-green { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #ffffff; }
+        .bg-card-blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; }
+        .bg-card-wild { background: linear-gradient(135deg, #27272a 0%, #09090b 100%); color: #ffffff; }
+
+        .card-oval {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-25deg);
+            width: 78%;
+            height: 58%;
+            background: #ffffff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.25);
+        }
+
+        .text-card-red { color: #dc2626; }
+        .text-card-yellow { color: #ca8a04; }
+        .text-card-green { color: #16a34a; }
+        .text-card-blue { color: #2563eb; }
+
+        .card-back {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            border: 2px solid #ffffff;
+            transform: rotateY(180deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-back-pattern {
+            width: 88%;
+            height: 88%;
+            border: 1.5px dashed rgba(255, 255, 255, 0.4);
+            border-radius: 5px;
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(255, 255, 255, 0.08),
+                rgba(255, 255, 255, 0.08) 6px,
+                transparent 6px,
+                transparent 12px
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Glassmorphic overlay */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.90);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        /* Scrollable Canvas */
+        #tabletop-container {
+            width: 3000px;
+            height: 2000px;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* Hand Slot Area */
+        .hand-card {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            transform: none !important;
+            flex-shrink: 0;
+        }
+
+        /* Player Remote Cursor */
+        .player-cursor {
+            position: absolute;
+            pointer-events: none;
+            z-index: 99999;
+            transition: left 0.1s linear, top 0.1s linear;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden theme-green-felt select-none" id="tabletop">
+
+    <!-- Lobby Modal -->
+    <div id="lobby-modal" class="fixed inset-0 z-[100000] flex items-center justify-center bg-black/80 p-4">
+        <div class="glass-panel w-full max-w-md p-6 rounded-2xl shadow-2xl text-white border border-white/20 flex flex-col gap-5">
+            <div class="text-center">
+                <h1 class="font-card text-3xl font-bold bg-gradient-to-r from-amber-400 via-red-500 to-indigo-400 bg-clip-text text-transparent">
+                    CARD GAME SANDBOX
+                </h1>
+                <p class="text-xs text-gray-300 mt-1">Multiplayer Tabletop & Private Hand Simulator</p>
+            </div>
+
+            <div id="lobby-error" class="hidden bg-rose-500/20 border border-rose-500/50 text-rose-200 text-xs p-3 rounded-lg"></div>
+
+            <div class="flex flex-col gap-3">
+                <div>
+                    <label class="text-xs text-gray-400 font-medium block mb-1">YOUR DISPLAY NAME</label>
+                    <input type="text" id="player-name" placeholder="Player 1" value="Player 1" class="w-full bg-slate-900 border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mt-2">
+                    <button onclick="createRoom()" id="btn-create-room" class="py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-xl text-sm shadow-lg active:scale-95 transition flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        Create Room
+                    </button>
+                    <button onclick="showJoinInput()" class="py-3 bg-slate-800 hover:bg-slate-700 border border-white/20 font-bold rounded-xl text-sm shadow-lg active:scale-95 transition">
+                        Join Room
+                    </button>
+                </div>
+
+                <!-- Join Code Box -->
+                <div id="join-box" class="hidden flex flex-col gap-2 mt-2 pt-3 border-t border-white/10">
+                    <div class="flex gap-2">
+                        <input type="text" id="join-code" placeholder="ENTER 6-DIGIT CODE" maxlength="6" class="uppercase tracking-widest text-center w-full bg-slate-900 border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-400">
+                        <button onclick="joinRoom()" id="btn-join-room" class="px-5 bg-indigo-600 hover:bg-indigo-500 font-bold rounded-lg text-sm transition">
+                            Join
+                        </button>
+                    </div>
+                </div>
+
+                <div class="relative my-2 text-center">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-white/10"></div></div>
+                    <span class="relative bg-slate-900/80 px-2 text-[10px] text-gray-400 uppercase">Or Play Locally</span>
+                </div>
+
+                <button onclick="startSinglePlayer()" class="py-2.5 bg-slate-800/80 hover:bg-slate-700/80 border border-white/15 text-gray-300 font-semibold rounded-xl text-xs transition flex items-center justify-center gap-2">
+                    ⚡ Offline / Singleplayer Mode
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Header Navigation -->
+    <header class="absolute top-0 left-0 right-0 z-50 p-2.5 flex flex-wrap items-center justify-between gap-2 glass-panel text-white shadow-xl">
+        <div class="flex items-center gap-3">
+            <div class="px-3 py-1 bg-gradient-to-r from-amber-500 to-red-600 rounded-lg shadow-md font-card font-bold text-sm tracking-wide flex items-center gap-1.5">
+                CARD SANDBOX
+            </div>
+
+            <!-- Room Badge -->
+            <div id="room-badge" class="hidden items-center gap-2 bg-slate-800 px-3 py-1 rounded-lg border border-amber-400/40">
+                <span class="text-xs text-gray-400">Room:</span>
+                <strong id="display-room-code" class="text-amber-400 text-sm font-mono tracking-wider">------</strong>
+                <button onclick="copyRoomCode()" class="text-xs bg-white/10 hover:bg-white/20 px-1.5 py-0.5 rounded text-gray-300 ml-1">Copy</button>
+            </div>
+
+            <!-- Stats -->
+            <div class="flex items-center gap-2 text-xs text-gray-300 bg-black/40 px-2.5 py-1 rounded-full border border-white/10">
+                <span>Deck: <strong id="stat-deck" class="text-amber-400">0</strong></span>
+                <span class="text-gray-500">•</span>
+                <span>Table: <strong id="stat-table" class="text-emerald-400">0</strong></span>
+                <span class="text-gray-500">•</span>
+                <span>Hand: <strong id="stat-hand" class="text-indigo-400">0</strong></span>
+            </div>
+        </div>
+
+        <!-- Player Badges -->
+        <div id="player-list" class="flex items-center gap-1.5 overflow-x-auto max-w-xs"></div>
+
+        <!-- Action Controls -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+            <button onclick="drawToTable(1)" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-semibold shadow active:scale-95 transition">
+                Draw 1
+            </button>
+            <button onclick="drawToTable(2)" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-xs font-semibold shadow active:scale-95 transition">
+                Draw 2
+            </button>
+            <button onclick="drawToTable(7)" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-md text-xs font-semibold shadow active:scale-95 transition">
+                Draw 7
+            </button>
+
+            <div class="h-4 w-px bg-white/20 mx-1"></div>
+
+            <button onclick="shuffleDeck()" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-md text-xs font-semibold shadow active:scale-95 transition">
+                Shuffle
+            </button>
+            <button onclick="flipSelectedOrAll()" class="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-md text-xs font-semibold shadow active:scale-95 transition" title="Key: F">
+                Flip
+            </button>
+            <button onclick="rotateSelectedCards(90)" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-md text-xs font-semibold shadow active:scale-95 transition" title="Key: R">
+                Rotate
+            </button>
+            <button onclick="tidyTable()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-semibold shadow active:scale-95 transition">
+                Tidy Table
+            </button>
+            <button onclick="returnAllToDeck()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-md text-xs font-semibold shadow active:scale-95 transition">
+                Gather All
+            </button>
+
+            <!-- Table Theme Selector -->
+            <select id="theme-select" onchange="changeTheme(this.value)" class="bg-gray-800 text-white text-xs rounded-md px-2 py-1 border border-gray-700 outline-none cursor-pointer">
+                <option value="theme-green-felt">Classic Felt</option>
+                <option value="theme-blue-felt">Royal Blue</option>
+                <option value="theme-dark-slate">Dark Slate</option>
+                <option value="theme-blueprint">Blueprint</option>
+            </select>
+        </div>
+    </header>
+
+    <!-- Tabletop Canvas -->
+    <div id="tabletop-scroll-wrapper" class="w-full h-full overflow-auto relative pt-16">
+        <main id="tabletop-container" class="relative">
+            <!-- Main Deck Stack -->
+            <div id="deck-anchor" class="absolute top-20 left-10 flex flex-col items-center group z-10">
+                <div id="deck-stack" onclick="drawToHandOrTable(1)" class="relative w-16 h-24 rounded-lg border-2 border-dashed border-white/30 flex items-center justify-center cursor-pointer transition transform group-hover:scale-105 active:scale-95 bg-black/20">
+                    <div class="text-white/40 text-[10px] font-bold text-center pointer-events-none p-1">
+                        EMPTY
+                    </div>
+                </div>
+                <span class="text-white/80 text-[10px] font-medium mt-1 bg-black/50 px-2 py-0.5 rounded-full border border-white/10">Main Deck</span>
+            </div>
+
+            <!-- Remote Cursors Layer -->
+            <div id="cursors-layer" class="absolute inset-0 pointer-events-none z-[99998]"></div>
+        </main>
+    </div>
+
+    <!-- Private Hand Panel -->
+    <footer id="hand-panel" class="fixed bottom-0 left-0 right-0 z-40 h-36 glass-panel border-t border-white/20 transition-transform duration-300 flex flex-col">
+        <div class="px-4 py-1 bg-slate-900/90 border-b border-white/10 flex items-center justify-between text-xs text-gray-300">
+            <div class="flex items-center gap-2">
+                <span class="font-bold text-amber-400">YOUR PRIVATE HAND</span>
+                <span class="text-[10px] text-gray-400">(Cards placed here are hidden from other players)</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="drawToHand(1)" class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[11px] font-medium transition">
+                    + Draw to Hand
+                </button>
+                <button onclick="toggleHandPanel()" id="btn-toggle-hand" class="text-gray-400 hover:text-white px-2">
+                    ▼ Collapse
+                </button>
+            </div>
+        </div>
+
+        <div id="hand-cards-container" class="flex-1 p-2 flex items-center gap-2 overflow-x-auto min-h-0">
+            <div id="hand-empty-tip" class="w-full text-center text-xs text-gray-400 italic">
+                Your hand is currently empty. Click "Draw to Hand" or drag cards from the tabletop into this panel.
+            </div>
+        </div>
+    </footer>
+
+    <!-- Firebase Standard Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration Guard
+        let app, db, auth;
+        let isFirebaseAvailable = false;
+
+        try {
+            const firebaseConfig = typeof __firebase_config !== 'undefined' 
+                ? JSON.parse(__firebase_config) 
+                : {
+                    apiKey: "demo-api-key",
+                    authDomain: "demo-app.firebaseapp.com",
+                    projectId: "demo-app",
+                    storageBucket: "demo-app.appspot.com",
+                    messagingSenderId: "123456789",
+                    appId: "1:123456789:web:demo"
+                  };
+
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            isFirebaseAvailable = true;
+        } catch (e) {
+            console.warn("Firebase config fallback to local mode:", e);
+            isFirebaseAvailable = false;
+        }
+
+        // Global Game Context
+        const SUITS = ['red', 'yellow', 'green', 'blue'];
+        let isMultiplayer = false;
+        let currentRoomCode = null;
+        let localPlayerId = 'p_' + Math.random().toString(36).substring(2, 9);
+        let localPlayerName = 'Player 1';
+        let isHost = false;
+        let unsubscribeRoom = null;
+
+        let cardsState = {}; // cardId -> { id, color, type, label, x, y, zIndex, location: 'deck'|'table'|'hand', ownerId, isFlipped, rotation }
+        let deck = [];
+        let playerHand = []; // Array of card IDs
+        let topZIndex = 100;
+        let playersMap = {};
+
+        window.gameCtx = {
+            isMultiplayer: () => isMultiplayer,
+            getRoomCode: () => currentRoomCode,
+            getLocalPlayerId: () => localPlayerId
+        };
+
+        /* Audio FX Synthesizer */
+        const AudioFX = {
+            ctx: null,
+            init() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            },
+            playSlide() {
+                try {
+                    this.init();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(280, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + 0.05);
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.05);
+                } catch(e){}
+            },
+            playFlip() {
+                try {
+                    this.init();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(350, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(550, this.ctx.currentTime + 0.05);
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.05);
+                } catch(e){}
+            },
+            playShuffle() {
+                try {
+                    this.init();
+                    for (let i = 0; i < 4; i++) {
+                        setTimeout(() => {
+                            const osc = this.ctx.createOscillator();
+                            const gain = this.ctx.createGain();
+                            osc.type = 'square';
+                            osc.frequency.setValueAtTime(180 + Math.random() * 200, this.ctx.currentTime);
+                            gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.03);
+                            osc.connect(gain);
+                            gain.connect(this.ctx.destination);
+                            osc.start();
+                            osc.stop(this.ctx.currentTime + 0.03);
+                        }, i * 30);
+                    }
+                } catch(e){}
+            }
+        };
+
+        function createDeck() {
+            let cards = [];
+            let idCounter = 1;
+
+            SUITS.forEach(color => {
+                cards.push({ id: `card_${idCounter++}`, color: color, type: 'number', label: '0' });
+                for (let num = 1; num <= 9; num++) {
+                    cards.push({ id: `card_${idCounter++}`, color: color, type: 'number', label: `${num}` });
+                    cards.push({ id: `card_${idCounter++}`, color: color, type: 'number', label: `${num}` });
+                }
+                for (let i = 0; i < 6; i++) {
+                    cards.push({ id: `card_${idCounter++}`, color: color, type: 'special', label: 'SPECIAL' });
+                }
+            });
+
+            for (let i = 0; i < 8; i++) {
+                cards.push({ id: `card_${idCounter++}`, color: 'wild', type: 'wild', label: 'WILD' });
+            }
+
+            return cards;
+        }
+
+        function buildInitialGameState() {
+            const rawDeck = createDeck();
+            const initialState = {};
+            const initialDeck = [];
+
+            // Shuffle
+            for (let i = rawDeck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [rawDeck[i], rawDeck[j]] = [rawDeck[j], rawDeck[i]];
+            }
+
+            rawDeck.forEach((card, idx) => {
+                initialState[card.id] = {
+                    ...card,
+                    x: 0,
+                    y: 0,
+                    zIndex: idx + 1,
+                    location: 'deck',
+                    ownerId: null,
+                    isFlipped: true,
+                    rotation: 0
+                };
+                initialDeck.push(card.id);
+            });
+
+            return { cardsState: initialState, deck: initialDeck };
+        }
+
+        async function authenticateUser() {
+            if (!isFirebaseAvailable) return null;
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    return await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    return await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.warn("Auth error fallback:", err);
+                return null;
+            }
+        }
+
+        window.showJoinInput = function() {
+            document.getElementById('join-box').classList.remove('hidden');
+        };
+
+        window.createRoom = async function() {
+            const nameInput = document.getElementById('player-name').value.trim();
+            if (nameInput) localPlayerName = nameInput;
+
+            const errBox = document.getElementById('lobby-error');
+            const btn = document.getElementById('btn-create-room');
+            errBox.classList.add('hidden');
+            btn.disabled = true;
+            btn.textContent = "Creating...";
+
+            try {
+                if (isFirebaseAvailable) {
+                    await authenticateUser();
+                }
+
+                const roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'card-sandbox';
+                const roomDocRef = isFirebaseAvailable ? doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode) : null;
+
+                const { cardsState: newCards, deck: newDeck } = buildInitialGameState();
+
+                const playerColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b'];
+
+                const roomData = {
+                    code: roomCode,
+                    hostId: localPlayerId,
+                    cardsState: newCards,
+                    deck: newDeck,
+                    players: {
+                        [localPlayerId]: {
+                            id: localPlayerId,
+                            name: localPlayerName,
+                            color: playerColors[0],
+                            cursor: { x: 0, y: 0 }
+                        }
+                    },
+                    lastUpdated: Date.now()
+                };
+
+                if (isFirebaseAvailable && roomDocRef) {
+                    await setDoc(roomDocRef, roomData);
+                    subscribeToRoom(roomCode);
+                } else {
+                    // Local Multiplayer fallback
+                    initializeLocalState(roomData);
+                }
+
+                currentRoomCode = roomCode;
+                isMultiplayer = true;
+                isHost = true;
+
+                document.getElementById('display-room-code').textContent = roomCode;
+                document.getElementById('room-badge').classList.remove('hidden');
+                document.getElementById('room-badge').classList.add('flex');
+                document.getElementById('lobby-modal').classList.add('hidden');
+
+            } catch (error) {
+                console.error("Create room error:", error);
+                errBox.textContent = "Unable to create online room. Falling back to offline mode.";
+                errBox.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = "Create Room";
+            }
+        };
+
+        window.joinRoom = async function() {
+            const nameInput = document.getElementById('player-name').value.trim();
+            if (nameInput) localPlayerName = nameInput;
+
+            const codeInput = document.getElementById('join-code').value.trim().toUpperCase();
+            const errBox = document.getElementById('lobby-error');
+            const btn = document.getElementById('btn-join-room');
+
+            if (!codeInput || codeInput.length < 4) {
+                errBox.textContent = "Please enter a valid room code.";
+                errBox.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = "...";
+
+            try {
+                if (isFirebaseAvailable) {
+                    await authenticateUser();
+                }
+
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'card-sandbox';
+                const roomDocRef = isFirebaseAvailable ? doc(db, 'artifacts', appId, 'public', 'data', 'rooms', codeInput) : null;
+
+                if (roomDocRef) {
+                    const snap = await getDoc(roomDocRef);
+                    if (!snap.exists()) {
+                        throw new Error("Room code not found!");
+                    }
+
+                    const roomData = snap.data();
+                    const existingPlayers = roomData.players || {};
+                    const pKeys = Object.keys(existingPlayers);
+
+                    if (pKeys.length >= 4 && !existingPlayers[localPlayerId]) {
+                        throw new Error("Room is full! Maximum 4 players allowed.");
+                    }
+
+                    const playerColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b'];
+                    const assignedColor = playerColors[pKeys.length % 4];
+
+                    existingPlayers[localPlayerId] = {
+                        id: localPlayerId,
+                        name: localPlayerName,
+                        color: assignedColor,
+                        cursor: { x: 0, y: 0 }
+                    };
+
+                    await updateDoc(roomDocRef, {
+                        players: existingPlayers,
+                        lastUpdated: Date.now()
+                    });
+
+                    subscribeToRoom(codeInput);
+                } else {
+                    throw new Error("Online multiplayer unavailable.");
+                }
+
+                currentRoomCode = codeInput;
+                isMultiplayer = true;
+                isHost = false;
+
+                document.getElementById('display-room-code').textContent = codeInput;
+                document.getElementById('room-badge').classList.remove('hidden');
+                document.getElementById('room-badge').classList.add('flex');
+                document.getElementById('lobby-modal').classList.add('hidden');
+
+            } catch (error) {
+                console.error("Join room error:", error);
+                errBox.textContent = error.message || "Failed to join room.";
+                errBox.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = "Join";
+            }
+        };
+
+        window.startSinglePlayer = function() {
+            isMultiplayer = false;
+            const { cardsState: newCards, deck: newDeck } = buildInitialGameState();
+            cardsState = newCards;
+            deck = newDeck;
+            playerHand = [];
+
+            renderFullGame();
+            document.getElementById('lobby-modal').classList.add('hidden');
+            AudioFX.playShuffle();
+        };
+
+        function subscribeToRoom(code) {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'card-sandbox';
+            const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+
+            unsubscribeRoom = onSnapshot(roomDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    cardsState = data.cardsState || {};
+                    deck = data.deck || [];
+                    playersMap = data.players || {};
+
+                    // Extract local hand
+                    playerHand = Object.values(cardsState)
+                        .filter(c => c.location === 'hand' && c.ownerId === localPlayerId)
+                        .map(c => c.id);
+
+                    renderFullGame();
+                }
+            }, (error) => {
+                console.error("Room snapshot error:", error);
+            });
+        }
+
+        async function syncRoomState() {
+            if (!isMultiplayer || !currentRoomCode || !isFirebaseAvailable) return;
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'card-sandbox';
+            const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomCode);
+
+            try {
+                await updateDoc(roomDocRef, {
+                    cardsState: cardsState,
+                    deck: deck,
+                    lastUpdated: Date.now()
+                });
+            } catch (e) {
+                console.error("Sync error:", e);
+            }
+        }
+
+        function renderFullGame() {
+            const container = document.getElementById('tabletop-container');
+
+            // Render/Update Tabletop Cards
+            Object.values(cardsState).forEach(card => {
+                let el = document.getElementById(card.id);
+
+                if (card.location === 'table') {
+                    if (!el) {
+                        el = createCardDOM(card);
+                        container.appendChild(el);
+                    } else {
+                        updateCardDOM(el, card);
+                    }
+                } else {
+                    // Remove if in deck or hand
+                    if (el) el.remove();
+                }
+            });
+
+            renderHandPanel();
+            renderDeckStack();
+            renderPlayerBadges();
+            updateStats();
+        }
+
+        function createCardDOM(card) {
+            const el = document.createElement('div');
+            el.id = card.id;
+            updateCardDOM(el, card);
+            attachCardEvents(el);
+            return el;
+        }
+
+        function updateCardDOM(el, card) {
+            el.className = `card ${card.isFlipped ? 'is-flipped' : ''}`;
+            el.style.zIndex = card.zIndex;
+            el.style.left = `${card.x}px`;
+            el.style.top = `${card.y}px`;
+            el.style.transform = `rotate(${card.rotation}deg)`;
+
+            const bgClass = `bg-card-${card.color}`;
+            const textClass = `text-card-${card.color}`;
+
+            el.innerHTML = `
+                <div class="card-inner">
+                    <div class="card-front ${bgClass}">
+                        <div class="flex flex-col items-start leading-none">
+                            <span class="font-card font-bold text-[9px] tracking-tight">${card.label}</span>
+                        </div>
+                        <div class="card-oval">
+                            <span class="font-card font-black ${textClass} ${card.label.length > 2 ? 'text-[8px]' : 'text-lg'} tracking-tighter">
+                                ${card.label}
+                            </span>
+                        </div>
+                        <div class="flex flex-col items-end leading-none transform rotate-180">
+                            <span class="font-card font-bold text-[9px] tracking-tight">${card.label}</span>
+                        </div>
+                    </div>
+                    <div class="card-back">
+                        <div class="card-back-pattern">
+                            <div class="w-3.5 h-3.5 rounded-full border border-white/30 flex items-center justify-center">
+                                <span class="font-card text-[7px] text-white/60 font-bold">★</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHandPanel() {
+            const handContainer = document.getElementById('hand-cards-container');
+            const tip = document.getElementById('hand-empty-tip');
+
+            handContainer.querySelectorAll('.card').forEach(c => c.remove());
+
+            if (playerHand.length === 0) {
+                if (tip) tip.classList.remove('hidden');
+                return;
+            }
+
+            if (tip) tip.classList.add('hidden');
+
+            playerHand.forEach(cardId => {
+                const card = cardsState[cardId];
+                if (!card) return;
+
+                const handEl = document.createElement('div');
+                handEl.id = `hand_${card.id}`;
+                handEl.className = 'card hand-card hover:-translate-y-2 transition-transform';
+                
+                const bgClass = `bg-card-${card.color}`;
+                const textClass = `text-card-${card.color}`;
+
+                handEl.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-front ${bgClass}">
+                            <div class="flex flex-col items-start leading-none">
+                                <span class="font-card font-bold text-[9px] tracking-tight">${card.label}</span>
+                            </div>
+                            <div class="card-oval">
+                                <span class="font-card font-black ${textClass} ${card.label.length > 2 ? 'text-[8px]' : 'text-lg'} tracking-tighter">
+                                    ${card.label}
+                                </span>
+                            </div>
+                            <div class="flex flex-col items-end leading-none transform rotate-180">
+                                <span class="font-card font-bold text-[9px] tracking-tight">${card.label}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Drag out of hand onto tabletop
+                handEl.addEventListener('mousedown', (e) => onHandCardDragStart(e, card.id));
+                handEl.addEventListener('touchstart', (e) => onHandCardDragStart(e, card.id), { passive: false });
+
+                handContainer.appendChild(handEl);
+            });
+        }
+
+        function renderDeckStack() {
+            const stackContainer = document.getElementById('deck-stack');
+            const oldLayers = stackContainer.querySelectorAll('.deck-layer');
+            oldLayers.forEach(l => l.remove());
+
+            const count = deck.length;
+            if (count === 0) return;
+
+            const layersCount = Math.min(Math.floor(count / 6) + 1, 5);
+            for (let i = 0; i < layersCount; i++) {
+                const layer = document.createElement('div');
+                layer.className = 'deck-layer absolute inset-0 rounded-lg bg-slate-900 border-2 border-white/80 shadow-md pointer-events-none';
+                layer.style.transform = `translate(${-i * 1.5}px, ${-i * 1.5}px)`;
+
+                if (i === layersCount - 1) {
+                    layer.innerHTML = `
+                        <div class="w-full h-full flex items-center justify-center p-1">
+                            <div class="w-full h-full border border-dashed border-white/30 rounded flex flex-col items-center justify-center bg-slate-800/90">
+                                <span class="font-card text-xs text-white font-bold">${count}</span>
+                                <span class="text-[7px] text-gray-300">CARDS</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                stackContainer.appendChild(layer);
+            }
+        }
+
+        function renderPlayerBadges() {
+            const container = document.getElementById('player-list');
+            container.innerHTML = '';
+
+            Object.values(playersMap).forEach(p => {
+                const badge = document.createElement('div');
+                badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold text-white flex items-center gap-1 border border-white/20 shadow-sm';
+                badge.style.backgroundColor = p.color || '#3b82f6';
+                badge.innerHTML = `
+                    <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                    <span>${p.name}${p.id === localPlayerId ? ' (You)' : ''}</span>
+                `;
+                container.appendChild(badge);
+            });
+        }
+
+        function updateStats() {
+            const deckCount = deck.length;
+            const tableCount = Object.values(cardsState).filter(c => c.location === 'table').length;
+            const handCount = playerHand.length;
+
+            document.getElementById('stat-deck').textContent = deckCount;
+            document.getElementById('stat-table').textContent = tableCount;
+            document.getElementById('stat-hand').textContent = handCount;
+        }
+
+        let draggingCardId = null;
+        let dragOffset = { x: 0, y: 0 };
+
+        function attachCardEvents(el) {
+            el.addEventListener('mousedown', onCardStartDrag);
+            el.addEventListener('touchstart', onCardStartDrag, { passive: false });
+
+            el.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                flipCard(el.id);
+            });
+        }
+
+        function onCardStartDrag(e) {
+            if (e.button && e.button !== 0) return;
+            e.stopPropagation();
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            draggingCardId = e.currentTarget.id;
+            const card = cardsState[draggingCardId];
+
+            topZIndex++;
+            card.zIndex = topZIndex;
+
+            dragOffset = {
+                x: clientX - card.x,
+                y: clientY - card.y
+            };
+
+            document.addEventListener('mousemove', onCardMove);
+            document.addEventListener('touchmove', onCardMove, { passive: false });
+            document.addEventListener('mouseup', onCardEnd);
+            document.addEventListener('touchend', onCardEnd);
+        }
+
+        function onCardMove(e) {
+            if (!draggingCardId) return;
+            e.preventDefault();
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            const card = cardsState[draggingCardId];
+            card.x = Math.max(10, clientX - dragOffset.x);
+            card.y = Math.max(10, clientY - dragOffset.y);
+
+            const el = document.getElementById(card.id);
+            if (el) {
+                el.style.left = `${card.x}px`;
+                el.style.top = `${card.y}px`;
+                el.style.zIndex = card.zIndex;
+            }
+        }
+
+        function onCardEnd(e) {
+            if (!draggingCardId) return;
+
+            const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+            const handPanel = document.getElementById('hand-panel').getBoundingClientRect();
+
+            // Check if dropped into Hand Drawer
+            if (clientY >= handPanel.top) {
+                const card = cardsState[draggingCardId];
+                card.location = 'hand';
+                card.ownerId = localPlayerId;
+                playerHand.push(card.id);
+
+                const el = document.getElementById(card.id);
+                if (el) el.remove();
+
+                renderHandPanel();
+                updateStats();
+                AudioFX.playSlide();
+            } else {
+                AudioFX.playSlide();
+            }
+
+            draggingCardId = null;
+            syncRoomState();
+
+            document.removeEventListener('mousemove', onCardMove);
+            document.removeEventListener('touchmove', onCardMove);
+            document.removeEventListener('mouseup', onCardEnd);
+            document.removeEventListener('touchend', onCardEnd);
+        }
+
+        function onHandCardDragStart(e, cardId) {
+            e.stopPropagation();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            // Remove from hand, place on table at cursor position
+            playerHand = playerHand.filter(id => id !== cardId);
+            const card = cardsState[cardId];
+            card.location = 'table';
+            card.ownerId = null;
+            card.isFlipped = false;
+            card.x = clientX - 32;
+            card.y = clientY - 47;
+            topZIndex++;
+            card.zIndex = topZIndex;
+
+            const el = createCardDOM(card);
+            document.getElementById('tabletop-container').appendChild(el);
+
+            draggingCardId = cardId;
+            dragOffset = { x: 32, y: 47 };
+
+            renderHandPanel();
+            updateStats();
+
+            document.addEventListener('mousemove', onCardMove);
+            document.addEventListener('touchmove', onCardMove, { passive: false });
+            document.addEventListener('mouseup', onCardEnd);
+            document.addEventListener('touchend', onCardEnd);
+        }
+
+        window.drawToTable = function(amount = 1) {
+            const baseLeft = 140;
+            const baseTop = 80;
+
+            for (let i = 0; i < amount; i++) {
+                if (deck.length === 0) break;
+                const cardId = deck.pop();
+                const card = cardsState[cardId];
+
+                card.location = 'table';
+                card.isFlipped = false;
+                card.rotation = (Math.random() * 8) - 4;
+                card.x = baseLeft + (i * 15) + (Math.random() * 20);
+                card.y = baseTop + (i * 8) + (Math.random() * 20);
+                topZIndex++;
+                card.zIndex = topZIndex;
+
+                const cardEl = createCardDOM(card);
+                document.getElementById('tabletop-container').appendChild(cardEl);
+            }
+
+            renderDeckStack();
+            updateStats();
+            AudioFX.playSlide();
+            syncRoomState();
+        };
+
+        window.drawToHand = function(amount = 1) {
+            for (let i = 0; i < amount; i++) {
+                if (deck.length === 0) break;
+                const cardId = deck.pop();
+                const card = cardsState[cardId];
+
+                card.location = 'hand';
+                card.ownerId = localPlayerId;
+                playerHand.push(cardId);
+            }
+
+            renderHandPanel();
+            renderDeckStack();
+            updateStats();
+            AudioFX.playSlide();
+            syncRoomState();
+        };
+
+        window.drawToHandOrTable = function(amount = 1) {
+            drawToHand(amount);
+        };
+
+        window.flipCard = function(cardId) {
+            const card = cardsState[cardId];
+            if (!card) return;
+
+            card.isFlipped = !card.isFlipped;
+            const el = document.getElementById(cardId);
+            if (el) el.classList.toggle('is-flipped', card.isFlipped);
+
+            AudioFX.playFlip();
+            syncRoomState();
+        };
+
+        window.flipSelectedOrAll = function() {
+            const tableCards = Object.values(cardsState).filter(c => c.location === 'table');
+            if (tableCards.length === 0) return;
+
+            const shouldFlipFaceDown = tableCards.some(c => !c.isFlipped);
+            tableCards.forEach(card => {
+                card.isFlipped = shouldFlipFaceDown;
+                const el = document.getElementById(card.id);
+                if (el) el.classList.toggle('is-flipped', shouldFlipFaceDown);
+            });
+
+            AudioFX.playFlip();
+            syncRoomState();
+        };
+
+        window.rotateSelectedCards = function(deg) {
+            const tableCards = Object.values(cardsState).filter(c => c.location === 'table');
+            tableCards.forEach(card => {
+                card.rotation = (card.rotation + deg) % 360;
+                const el = document.getElementById(card.id);
+                if (el) el.style.transform = `rotate(${card.rotation}deg)`;
+            });
+            syncRoomState();
+        };
+
+        window.shuffleDeck = function() {
+            if (deck.length === 0) return;
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+            renderDeckStack();
+            AudioFX.playShuffle();
+            syncRoomState();
+        };
+
+        window.tidyTable = function() {
+            const tableCards = Object.values(cardsState).filter(c => c.location === 'table');
+            if (tableCards.length === 0) return;
+
+            const startX = 160;
+            const startY = 80;
+            const cols = Math.min(Math.ceil(Math.sqrt(tableCards.length)), 10);
+
+            tableCards.forEach((card, idx) => {
+                const col = idx % cols;
+                const row = Math.floor(idx / cols);
+
+                card.x = startX + col * 74;
+                card.y = startY + row * 104;
+                card.rotation = 0;
+
+                const el = document.getElementById(card.id);
+                if (el) {
+                    el.style.left = `${card.x}px`;
+                    el.style.top = `${card.y}px`;
+                    el.style.transform = `rotate(0deg)`;
+                }
+            });
+
+            AudioFX.playSlide();
+            syncRoomState();
+        };
+
+        window.returnAllToDeck = function() {
+            deck = [];
+            playerHand = [];
+
+            Object.values(cardsState).forEach((card, idx) => {
+                card.location = 'deck';
+                card.isFlipped = true;
+                card.ownerId = null;
+                card.rotation = 0;
+                card.zIndex = idx + 1;
+                deck.push(card.id);
+
+                const el = document.getElementById(card.id);
+                if (el) el.remove();
+            });
+
+            shuffleDeck();
+            renderHandPanel();
+            renderDeckStack();
+            updateStats();
+            AudioFX.playShuffle();
+            syncRoomState();
+        };
+
+        window.changeTheme = function(themeClass) {
+            document.body.className = `h-screen w-screen overflow-hidden ${themeClass} select-none`;
+        };
+
+        window.copyRoomCode = function() {
+            if (!currentRoomCode) return;
+            const tempInput = document.createElement('input');
+            tempInput.value = currentRoomCode;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            alert("Room Code copied to clipboard: " + currentRoomCode);
+        };
+
+        window.toggleHandPanel = function() {
+            const panel = document.getElementById('hand-panel');
+            const btn = document.getElementById('btn-toggle-hand');
+            if (panel.classList.contains('translate-y-28')) {
+                panel.classList.remove('translate-y-28');
+                btn.textContent = '▼ Collapse';
+            } else {
+                panel.classList.add('translate-y-28');
+                btn.textContent = '▲ Expand';
+            }
+        };
+
+        // Hotkeys
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            if (e.key === 'f' || e.key === 'F') {
+                flipSelectedOrAll();
+            } else if (e.key === 'r' || e.key === 'R') {
+                rotateSelectedCards(e.shiftKey ? -90 : 90);
+            }
+        });
+    </script>
+</body>
+</html>
